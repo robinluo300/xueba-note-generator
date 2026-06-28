@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>学霸笔记生成器</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f5f5f5; color: #333; line-height: 1.6; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  .container { background: #fff; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,.08); padding: 40px; max-width: 560px; width: 90%; }
+  h1 { font-size: 24px; text-align: center; margin-bottom: 8px; }
+  .subtitle { text-align: center; color: #999; font-size: 14px; margin-bottom: 28px; }
+  label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; color: #555; }
+  input[type="text"], input[type="password"] { width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 15px; margin-bottom: 16px; transition: border .2s; }
+  input:focus { outline: none; border-color: #4a90d9; box-shadow: 0 0 0 3px rgba(74,144,217,.12); }
+  .url-row { display: flex; gap: 8px; }
+  .url-row input { flex: 1; }
+  .url-row button { padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; background: #f8f8f8; cursor: pointer; font-size: 13px; white-space: nowrap; color: #666; }
+  .url-row button:hover { background: #eee; }
+  .hint { font-size: 12px; color: #aaa; margin-top: -12px; margin-bottom: 16px; }
+  .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background .2s; margin-top: 8px; }
+  .btn-primary { background: #4a90d9; color: #fff; }
+  .btn-primary:hover { background: #357abd; }
+  .btn-primary:disabled { background: #b0c4de; cursor: not-allowed; }
+  .status { margin-top: 20px; padding: 14px; border-radius: 8px; font-size: 14px; display: none; }
+  .status.info { background: #e8f4fd; color: #1a73e8; display: block; }
+  .status.success { background: #e6f7e6; color: #1a8a1a; display: block; }
+  .status.error { background: #fde8e8; color: #c62828; display: block; }
+  .status a { color: inherit; }
+  .footer { text-align: center; margin-top: 20px; font-size: 12px; color: #bbb; }
+  .footer a { color: #999; text-decoration: none; }
+  .github-corner { display: none; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>📝 学霸笔记生成器</h1>
+  <p class="subtitle">输入课文名，AI 自动生成结构化 Obsidian 笔记</p>
+
+  <label for="apiKey">通义千问 API Key</label>
+  <input type="password" id="apiKey" placeholder="sk-xxxxxxxxxxxxxxxx" autocomplete="off">
+
+  <label for="topic">课文名称</label>
+  <input type="text" id="topic" placeholder="例如：小蝌蚪找妈妈">
+
+  <label for="url">汉查查网页 URL（可选）</label>
+  <div class="url-row">
+    <input type="text" id="url" placeholder="留空则自动搜索">
+    <button onclick="fetchUrl()" title="从课文名自动获取">🔍</button>
+  </div>
+  <p class="hint">从 hanchacha.com 找课文页面，复制网址粘贴到这里</p>
+
+  <button class="btn btn-primary" id="generateBtn" onclick="generate()">🚀 生成笔记</button>
+
+  <div id="status" class="status"></div>
+
+  <div class="footer">
+    <a href="https://github.com/robinluo300/xueba-note-generator" target="_blank">GitHub</a>
+  </div>
+</div>
+
+<script>
+const API_BASE = "https://api.github.com";
+const OWNER = "robinluo300";
+const REPO = "xueba-note-generator";
+
+// Restore saved API key
+const savedKey = localStorage.getItem("dashscope_api_key");
+if (savedKey) document.getElementById("apiKey").value = savedKey;
+
+function setStatus(msg, type, link = "") {
+  const el = document.getElementById("status");
+  el.className = "status " + type;
+  el.innerHTML = link ? `${msg} <a href="${link}" target="_blank">查看笔记</a>` : msg;
+}
+
+async function fetchUrl() {
+  const topic = document.getElementById("topic").value.trim();
+  if (!topic) return alert("请先输入课文名称");
+  setStatus("正在搜索汉查查…", "info");
+  try {
+    const r = await fetch(`https://hanchacha.com/yuwen/`);
+    // Can't do cross-origin search from browser. Show manual hint.
+    setStatus("浏览器限制无法自动搜索，请手动打开 hanchacha.com 找到课文页面并粘贴网址", "info");
+  } catch (e) {
+    setStatus("请手动打开 hanchacha.com 找到课文页面并粘贴网址", "info");
+  }
+}
+
+async function generate() {
+  const apiKey = document.getElementById("apiKey").value.trim();
+  const topic = document.getElementById("topic").value.trim();
+  const url = document.getElementById("url").value.trim();
+  const btn = document.getElementById("generateBtn");
+
+  if (!apiKey) return setStatus("请填写通义千问 API Key", "error");
+  if (!topic) return setStatus("请填写课文名称", "error");
+
+  // Save API key
+  localStorage.setItem("dashscope_api_key", apiKey);
+
+  btn.disabled = true;
+  btn.textContent = "⏳ 正在生成…";
+  setStatus("正在触发 GitHub Actions…", "info");
+
+  // Get GitHub Token from localStorage or prompt
+  let token = localStorage.getItem("github_token");
+  if (!token) {
+    token = prompt("请输入 GitHub Token（需含 repo 权限）：\nhttps://github.com/settings/tokens");
+    if (!token) {
+      btn.disabled = false;
+      btn.textContent = "🚀 生成笔记";
+      return;
+    }
+    localStorage.setItem("github_token", token);
+  }
+
+  try {
+    const r = await fetch(`${API_BASE}/repos/${OWNER}/${REPO}/actions/workflows/generate.yml/dispatches`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Accept": "application/vnd.github.v3+json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ref: "main",
+        inputs: { topic, url, api_key: apiKey },
+      }),
+    });
+
+    if (!r.ok) {
+      const err = await r.text();
+      // Maybe token expired
+      if (r.status === 401 || r.status === 403) {
+        localStorage.removeItem("github_token");
+        setStatus("Token 无效已清除，请重新生成", "error");
+      } else {
+        setStatus(`触发失败 (${r.status})`, "error");
+      }
+      btn.disabled = false;
+      btn.textContent = "🚀 生成笔记";
+      return;
+    }
+
+    setStatus(
+      "✅ Actions 已触发！生成约需 1-3 分钟",
+      "success",
+      `https://github.com/${OWNER}/${REPO}/actions`
+    );
+
+    // Poll for completion
+    let attempts = 0;
+    const maxAttempts = 60;
+    const poll = setInterval(async () => {
+      attempts++;
+      try {
+        const rr = await fetch(`${API_BASE}/repos/${OWNER}/${REPO}/actions/runs?event=workflow_dispatch&per_page=1`, {
+          headers: { "Authorization": `Bearer ${token}`, "Accept": "application/vnd.github.v3+json" },
+        });
+        const runs = await rr.json();
+        if (runs.workflow_runs && runs.workflow_runs.length > 0) {
+          const run = runs.workflow_runs[0];
+          if (run.conclusion === "success") {
+            clearInterval(poll);
+            const filePath = `笔记/${encodeURIComponent(topic)}.md`;
+            setStatus(
+              "✅ 笔记已生成！",
+              "success",
+              `https://github.com/${OWNER}/${REPO}/blob/main/${filePath}`
+            );
+            btn.disabled = false;
+            btn.textContent = "🚀 生成笔记";
+          } else if (run.conclusion === "failure") {
+            clearInterval(poll);
+            setStatus("❌ Actions 运行失败，请查看日志", "error", run.html_url);
+            btn.disabled = false;
+            btn.textContent = "🚀 生成笔记";
+          }
+        }
+      } catch(e) {}
+      if (attempts >= maxAttempts) {
+        clearInterval(poll);
+        setStatus("⏳ 生成仍在进行中，请稍后查看 Actions 日志", "info", `https://github.com/${OWNER}/${REPO}/actions`);
+        btn.disabled = false;
+        btn.textContent = "🚀 生成笔记";
+      }
+    }, 3000);
+  } catch (e) {
+    setStatus(`网络错误: ${e.message}`, "error");
+    btn.disabled = false;
+    btn.textContent = "🚀 生成笔记";
+  }
+}
+</script>
+</body>
+</html>
