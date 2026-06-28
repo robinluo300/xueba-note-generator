@@ -131,12 +131,11 @@ async function generate() {
 
     if (!r.ok) {
       const err = await r.text();
-      // Maybe token expired
       if (r.status === 401 || r.status === 403) {
         localStorage.removeItem("github_token");
         setStatus("Token 无效已清除，请重新生成", "error");
       } else {
-        setStatus(`触发失败 (${r.status})`, "error");
+        setStatus(`触发失败 (${r.status}): ${err}`, "error");
       }
       btn.disabled = false;
       btn.textContent = "🚀 生成笔记";

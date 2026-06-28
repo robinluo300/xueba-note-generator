@@ -50,7 +50,7 @@ def main():
         print(f"❌ AI 生成失败: {note}")
         sys.exit(1)
 
-    save_dir = args.output or os.path.join(_HERE, "..", "电子笔记", "学霸笔记")
+    save_dir = args.output or os.path.expanduser("~/Desktop/我的笔记")
     save_dir = os.path.normpath(save_dir)
     os.makedirs(save_dir, exist_ok=True)
 
