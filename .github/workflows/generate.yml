@@ -30,64 +30,13 @@ jobs:
       - name: 安装依赖
         run: pip install cloudscraper beautifulsoup4 pyyaml
 
-      - name: 爬取课文数据
-        id: crawl
-        run: |
-          python3 -c "
-import sys, json
-sys.path.insert(0, '.')
-from crawler import HanchachaCrawler
-
-hc = HanchachaCrawler(timeout=30)
-
-url = '${{ inputs.url }}'
-if url:
-    data = hc.crawl(url)
-else:
-    data = hc.search_by_name('${{ inputs.topic }}')
-
-if not data:
-    print('FAILED: 未找到课文')
-    sys.exit(1)
-
-with open('/tmp/lesson_data.json', 'w', encoding='utf-8') as f:
-    json.dump(data, f, ensure_ascii=False, indent=2)
-print(f'OK: {data[\"title\"]} ({data.get(\"grade\", \"\")})')
-"
-
-      - name: AI 生成笔记
-        id: generate
-        run: |
-          python3 -c "
-import sys, json
-sys.path.insert(0, '.')
-from ai_generator import generate_note
-
-with open('/tmp/lesson_data.json', 'r', encoding='utf-8') as f:
-    data = json.load(f)
-
-note = generate_note(data, '${{ inputs.api_key }}')
-if not note:
-    print('FAILED: AI 生成失败')
-    sys.exit(1)
-
-with open('/tmp/lesson_note.md', 'w', encoding='utf-8') as f:
-    f.write(note)
-print(f'OK: 生成 {len(note)} 字符')
-"
-
-      - name: 保存笔记
-        run: |
-          lesson_name="${{ inputs.topic }}"
-          safe_name=$(echo "$lesson_name" | sed 's/[\\/:*?"<>|]/_/g')
-          mkdir -p 笔记
-          cp /tmp/lesson_note.md "笔记/${safe_name}.md"
-          echo "笔记已保存: 笔记/${safe_name}.md"
+      - name: 生成笔记
+        run: python3 workflow_runner.py "${{ inputs.topic }}" "${{ inputs.url }}" "${{ inputs.api_key }}"
 
       - name: 提交到仓库
         run: |
           git config user.name "xueba-bot"
           git config user.email "bot@xueba-note-generator"
           git add 笔记/
-          git commit -m "📝 生成笔记: ${{ inputs.topic }}"
+          git commit -m "生成笔记: ${{ inputs.topic }}"
           git push
